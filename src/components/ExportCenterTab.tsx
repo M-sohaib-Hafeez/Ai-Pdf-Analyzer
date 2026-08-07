@@ -11,6 +11,7 @@ import {
   Share2
 } from 'lucide-react';
 import { AnalysisResult } from '../types';
+import { escapeHtml, tableToCsv } from '../utils/csv';
 
 interface ExportCenterTabProps {
   analysis: AnalysisResult;
@@ -128,7 +129,7 @@ export const ExportCenterTab: React.FC<ExportCenterTabProps> = ({ analysis }) =>
     printWindow.document.write(`
       <html>
         <head>
-          <title>${analysis.metadata.title} - Analysis Report</title>
+          <title>${escapeHtml(analysis.metadata.title)} - Analysis Report</title>
           <style>
             body { font-family: system-ui, sans-serif; padding: 40px; color: #1e293b; line-height: 1.6; }
             h1 { color: #0f172a; font-size: 24px; border-bottom: 2px solid #6366f1; padding-bottom: 8px; }
@@ -140,17 +141,17 @@ export const ExportCenterTab: React.FC<ExportCenterTabProps> = ({ analysis }) =>
           </style>
         </head>
         <body>
-          <h1>${analysis.metadata.title}</h1>
-          <p><strong>Authors:</strong> ${analysis.metadata.authors.join(', ')} | <strong>Date:</strong> ${analysis.metadata.publicationDate}</p>
-          <h2>Executive Summary (${analysis.personaLens.toUpperCase()} Lens)</h2>
-          <p>${analysis.executiveSummary}</p>
+          <h1>${escapeHtml(analysis.metadata.title)}</h1>
+          <p><strong>Authors:</strong> ${escapeHtml(analysis.metadata.authors.join(', '))} | <strong>Date:</strong> ${escapeHtml(analysis.metadata.publicationDate)}</p>
+          <h2>Executive Summary (${escapeHtml(analysis.personaLens.toUpperCase())} Lens)</h2>
+          <p>${escapeHtml(analysis.executiveSummary)}</p>
           <h2>Key Insights</h2>
           <ul>
-            ${analysis.keyInsights.map(k => `<li><strong>[${k.impact.toUpperCase()}]</strong> ${k.statement} <em>(${k.citation})</em></li>`).join('')}
+            ${analysis.keyInsights.map(k => `<li><strong>[${escapeHtml(k.impact.toUpperCase())}]</strong> ${escapeHtml(k.statement)} <em>(${escapeHtml(k.citation)})</em></li>`).join('')}
           </ul>
           <h2>Action Items</h2>
           <ul>
-            ${analysis.actionItems.map(a => `<li>[${a.priority}] ${a.task} <em>(${a.pageCitation})</em></li>`).join('')}
+            ${analysis.actionItems.map(a => `<li>[${escapeHtml(a.priority)}] ${escapeHtml(a.task)} <em>(${escapeHtml(a.pageCitation)})</em></li>`).join('')}
           </ul>
         </body>
       </html>
@@ -233,14 +234,14 @@ export const ExportCenterTab: React.FC<ExportCenterTabProps> = ({ analysis }) =>
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black uppercase text-xs">
-                <FileText className="w-5 h-5 stroke-[2.5]" /> Google Docs Payload
+                <FileText className="w-5 h-5 stroke-[2.5]" /> Google Docs API Payload
               </div>
               <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-amber-400 text-slate-900 border border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-                Google Docs Schema
+                Copy for Integration
               </span>
             </div>
             <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Structured JSON request objects ready to be passed to Google Docs API batchUpdate endpoints.
+              Structured JSON request objects (Copy payload to send via your Google Docs API batchUpdate integration).
             </p>
 
             <div className="mt-3 bg-[#0f172a] text-indigo-300 p-3.5 rounded-xl font-mono text-[11px] h-32 overflow-y-auto border-2 border-slate-900">
@@ -270,14 +271,14 @@ export const ExportCenterTab: React.FC<ExportCenterTabProps> = ({ analysis }) =>
           <div>
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2 text-indigo-600 dark:text-indigo-400 font-black uppercase text-xs">
-                <Boxes className="w-5 h-5 stroke-[2.5]" /> Notion API Schema
+                <Boxes className="w-5 h-5 stroke-[2.5]" /> Notion API Payload
               </div>
               <span className="px-2.5 py-0.5 rounded text-[10px] font-black uppercase tracking-wider bg-slate-900 text-white border border-slate-900 shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
-                Notion JSON Blocks
+                Copy for Integration
               </span>
             </div>
             <p className="text-xs font-medium text-slate-600 dark:text-slate-400">
-              Clean JSON block hierarchy for direct insertion into Notion pages using Notion API endpoints.
+              Clean JSON block hierarchy (Copy payload to insert via your Notion API endpoints).
             </p>
 
             <div className="mt-3 bg-[#0f172a] text-emerald-400 p-3.5 rounded-xl font-mono text-[11px] h-32 overflow-y-auto border-2 border-slate-900">
@@ -330,7 +331,7 @@ export const ExportCenterTab: React.FC<ExportCenterTabProps> = ({ analysis }) =>
           <button
             onClick={() => {
               analysis.tables.forEach(t => {
-                const csv = [t.headers.join(','), ...t.rows.map(r => r.join(','))].join('\n');
+                const csv = tableToCsv(t.headers, t.rows);
                 downloadFile(csv, `${t.title.replace(/\s+/g, '_')}.csv`, 'text/csv');
               });
             }}

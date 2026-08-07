@@ -29,6 +29,7 @@ import {
   HelpCircle
 } from 'lucide-react';
 import { TableData, ChartType, ConfidenceLevel } from '../types';
+import { tableToCsv } from '../utils/csv';
 
 interface EditableTableProps {
   table: TableData;
@@ -95,16 +96,16 @@ export const EditableTable: React.FC<EditableTableProps> = ({
   };
 
   const downloadCsv = () => {
-    const csvContent =
-      'data:text/csv;charset=utf-8,' +
-      [headers.join(','), ...rows.map(r => r.map(c => `"${c}"`).join(','))].join('\n');
-    const encodedUri = encodeURI(csvContent);
+    const csvContent = tableToCsv(headers, rows);
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
-    link.setAttribute('href', encodedUri);
+    link.setAttribute('href', url);
     link.setAttribute('download', `${table.title.replace(/\s+/g, '_')}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
+    URL.revokeObjectURL(url);
   };
 
   const getConfidenceBadge = (confidence: ConfidenceLevel) => {
@@ -158,7 +159,7 @@ export const EditableTable: React.FC<EditableTableProps> = ({
         <div className="flex items-center gap-2 flex-wrap">
           {/* Chart Picker */}
           <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800 p-1 rounded-lg text-xs font-semibold">
-            {(['bar', 'line', 'pie', 'stacked_bar'] as ChartType[]).map((ct) => (
+            {(['bar', 'line', 'pie', 'stacked_bar', 'scatter'] as ChartType[]).map((ct) => (
               <button
                 key={ct}
                 onClick={() => setChartType(ct)}
@@ -297,6 +298,18 @@ export const EditableTable: React.FC<EditableTableProps> = ({
                   />
                 ))}
               </LineChart>
+            ) : chartType === 'scatter' ? (
+              <ScatterChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" opacity={0.2} />
+                <XAxis dataKey={headers[0]} stroke="#888888" fontSize={11} name={headers[0]} />
+                <YAxis dataKey={numericHeaders[0] || headers[1]} stroke="#888888" fontSize={11} name={numericHeaders[0] || headers[1]} />
+                <Tooltip
+                  contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', borderRadius: '8px', color: '#fff', fontSize: '12px' }}
+                  cursor={{ strokeDasharray: '3 3' }}
+                />
+                <Legend wrapperStyle={{ fontSize: '11px' }} />
+                <Scatter name={table.title} data={chartData} fill="#6366f1" />
+              </ScatterChart>
             ) : (
               <PieChart>
                 <Tooltip

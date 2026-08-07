@@ -3,19 +3,19 @@ import { VisualAsset } from '../types';
 import {
   Maximize2,
   Minimize2,
-  Download,
   Layers,
   Activity,
   ArrowRight,
   Database,
   Cpu,
-  CheckCircle,
   AlertTriangle,
   RefreshCw,
   GitCommit,
   ShieldAlert,
-  BarChart3,
-  PieChart
+  PieChart,
+  Boxes,
+  FileCode,
+  Sparkles
 } from 'lucide-react';
 
 interface DiagramViewerProps {
@@ -25,30 +25,35 @@ interface DiagramViewerProps {
 
 export const DiagramViewer: React.FC<DiagramViewerProps> = ({ asset, onJumpToPage }) => {
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'visual' | 'caption'>('visual');
 
   const titleLower = asset.title.toLowerCase();
   const captionLower = asset.caption.toLowerCase();
 
-  // Determine diagram archetype
+  // Gate specialized sample diagrams strictly to pre-baked sample document asset IDs
+  const isSampleAsset = asset.id ? (asset.id.startsWith('sample-') || asset.id.startsWith('doc-sample-') || asset.id.startsWith('v-')) : false;
+
+  // Determine diagram archetype for sample assets
   const isConcurrencyDiagram =
-    titleLower.includes('concurrency') ||
-    titleLower.includes('lost update') ||
-    captionLower.includes('dirty read') ||
-    captionLower.includes('lost update');
+    isSampleAsset &&
+    (titleLower.includes('concurrency') ||
+      titleLower.includes('lost update') ||
+      captionLower.includes('dirty read') ||
+      captionLower.includes('lost update'));
 
   const isArchitectureDiagram =
-    asset.category === 'architecture' ||
-    titleLower.includes('architecture') ||
-    titleLower.includes('pipeline') ||
-    captionLower.includes('inference workflow');
+    isSampleAsset &&
+    (asset.category === 'architecture' ||
+      titleLower.includes('architecture') ||
+      titleLower.includes('pipeline') ||
+      captionLower.includes('inference workflow'));
 
   const isDistributionChart =
-    asset.category === 'chart' ||
-    titleLower.includes('distribution') ||
-    titleLower.includes('chart') ||
-    titleLower.includes('share') ||
-    titleLower.includes('error classification');
+    isSampleAsset &&
+    (asset.category === 'chart' ||
+      titleLower.includes('distribution') ||
+      titleLower.includes('chart') ||
+      titleLower.includes('share') ||
+      titleLower.includes('error classification'));
 
   return (
     <div
@@ -87,8 +92,8 @@ export const DiagramViewer: React.FC<DiagramViewerProps> = ({ asset, onJumpToPag
         </div>
       </div>
 
-      {/* Main Interactive Diagram Canvas */}
-      <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-950 flex-1 overflow-auto flex flex-col justify-center items-center min-h-[320px]">
+      {/* Main Interactive Visual Diagram Canvas */}
+      <div className="p-4 sm:p-6 bg-slate-50 dark:bg-slate-950 flex-1 overflow-auto flex flex-col justify-center items-center min-h-[300px]">
         {isConcurrencyDiagram ? (
           <ConcurrencyAnomalyDiagram />
         ) : isArchitectureDiagram ? (
@@ -96,18 +101,34 @@ export const DiagramViewer: React.FC<DiagramViewerProps> = ({ asset, onJumpToPag
         ) : isDistributionChart ? (
           <ChartDistributionDiagram asset={asset} />
         ) : (
-          <GenericNodeDiagram asset={asset} />
+          <DynamicDiagramCanvas asset={asset} />
         )}
       </div>
 
-      {/* Footer Caption & Context */}
-      <div className="p-3.5 bg-white dark:bg-slate-900 border-t-2 border-slate-900 dark:border-slate-800 text-xs shrink-0 space-y-1.5">
-        <div className="flex items-center gap-2">
-          <span className="bento-eyebrow text-slate-500">Caption Annotation:</span>
+      {/* Extracted Visual Asset & Description Card (Displayed alongside diagram) */}
+      <div className="p-4 bg-white dark:bg-slate-900 border-t-2 border-slate-900 dark:border-slate-800 space-y-3 shrink-0">
+        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border-2 border-slate-900 space-y-2">
+          <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-800 pb-2">
+            <span className="text-[11px] font-black uppercase tracking-wider text-indigo-600 dark:text-indigo-400 flex items-center gap-1.5">
+              <Activity className="w-4 h-4 stroke-[2.5]" /> Extracted Visual Asset & Description
+            </span>
+            <span className="text-[10px] font-mono font-black uppercase text-white bg-indigo-600 px-2 py-0.5 rounded border border-slate-900">
+              PAGE {asset.pageNumber}
+            </span>
+          </div>
+          <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed font-sans">
+            {asset.description}
+          </p>
         </div>
-        <p className="text-xs font-bold text-slate-800 dark:text-slate-200 leading-relaxed font-sans bg-slate-100 dark:bg-slate-800/80 p-2.5 rounded-xl border border-slate-900 dark:border-slate-700">
-          "{asset.caption}"
-        </p>
+
+        {asset.caption && (
+          <div className="space-y-1">
+            <span className="bento-eyebrow text-slate-500 text-[10px]">Caption Annotation:</span>
+            <p className="text-xs font-semibold italic text-slate-800 dark:text-slate-200 bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl border border-slate-900 dark:border-slate-700">
+              "{asset.caption}"
+            </p>
+          </div>
+        )}
       </div>
     </div>
   );
@@ -321,20 +342,141 @@ const ChartDistributionDiagram: React.FC<{ asset: VisualAsset }> = ({ asset }) =
 };
 
 /* -------------------------------------------------------------------------- */
-/* Fallback: Generic Flow Node Diagram                                        */
+/* Dynamic Flow & Architecture Diagram Extractor & Renderer                   */
 /* -------------------------------------------------------------------------- */
-const GenericNodeDiagram: React.FC<{ asset: VisualAsset }> = ({ asset }) => {
+interface FlowStep {
+  number: number;
+  title: string;
+  detail: string;
+}
+
+function parseStepsFromText(description: string, defaultTitle: string): FlowStep[] {
+  let rawParts: string[] = [];
+
+  if (description.includes('->')) {
+    rawParts = description.split('->');
+  } else if (description.includes('-->')) {
+    rawParts = description.split('-->');
+  } else if (description.includes('=>')) {
+    rawParts = description.split('=>');
+  } else if (/\b(?:Step \d+|Phase \d+|Stage \d+|\d+\.)\b/i.test(description)) {
+    rawParts = description.split(/(?=\b(?:Step \d+|Phase \d+|Stage \d+|\d+\.)\b)/i);
+  } else if (description.includes(';')) {
+    rawParts = description.split(';');
+  } else {
+    // Split into sentences or clauses
+    rawParts = description.split(/(?<=[.!?])\s+/);
+  }
+
+  const steps: FlowStep[] = rawParts
+    .map(p => p.trim())
+    .filter(p => p.length > 2)
+    .map((part, index) => {
+      const cleanPart = part.replace(/^(Step \d+:?|Phase \d+:?|Stage \d+:?|\d+\.\s*)/i, '').trim();
+      const firstColon = cleanPart.indexOf(':');
+      let stepTitle = '';
+      let detail = cleanPart;
+
+      if (firstColon > 0 && firstColon < 30) {
+        stepTitle = cleanPart.substring(0, firstColon).trim();
+        detail = cleanPart.substring(firstColon + 1).trim();
+      } else {
+        const words = cleanPart.split(' ');
+        stepTitle = words.slice(0, Math.min(4, words.length)).join(' ');
+        if (words.length > 4) {
+          detail = words.slice(4).join(' ');
+        }
+      }
+
+      return {
+        number: index + 1,
+        title: stepTitle || `Stage ${index + 1}`,
+        detail: detail || cleanPart
+      };
+    });
+
+  if (steps.length >= 2) {
+    return steps.slice(0, 6);
+  }
+
+  // Fallback: divide description into sequential flow nodes
+  const words = description.split(' ');
+  const chunkSize = Math.max(1, Math.ceil(words.length / 3));
+  return [
+    { number: 1, title: 'Input & Ingestion', detail: words.slice(0, chunkSize).join(' ') || defaultTitle },
+    { number: 2, title: 'Processing & Logic', detail: words.slice(chunkSize, chunkSize * 2).join(' ') || 'Executes core workflow rules and data transformation.' },
+    { number: 3, title: 'Output & Evaluation', detail: words.slice(chunkSize * 2).join(' ') || 'Delivers final synthesized output to target systems.' }
+  ];
+}
+
+const DynamicDiagramCanvas: React.FC<{ asset: VisualAsset }> = ({ asset }) => {
+  const steps = parseStepsFromText(asset.description, asset.title);
+  const category = asset.category || 'diagram';
+
+  const categoryIcons: Record<string, React.ReactNode> = {
+    architecture: <Boxes className="w-4 h-4 text-indigo-600 dark:text-indigo-400 stroke-[2.5]" />,
+    chart: <PieChart className="w-4 h-4 text-emerald-600 dark:text-emerald-400 stroke-[2.5]" />,
+    formula: <FileCode className="w-4 h-4 text-amber-600 dark:text-amber-400 stroke-[2.5]" />,
+    diagram: <Activity className="w-4 h-4 text-indigo-600 dark:text-indigo-400 stroke-[2.5]" />,
+    photo: <Sparkles className="w-4 h-4 text-indigo-600 dark:text-indigo-400 stroke-[2.5]" />,
+    table_snapshot: <Layers className="w-4 h-4 text-indigo-600 dark:text-indigo-400 stroke-[2.5]" />
+  };
+
   return (
-    <div className="w-full max-w-md bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-slate-900 shadow-[4px_4px_0px_0px_rgba(15,23,42,1)] space-y-4 text-center">
-      <div className="w-12 h-12 rounded-2xl bg-indigo-100 dark:bg-indigo-950 border-2 border-slate-900 flex items-center justify-center mx-auto text-indigo-600">
-        <Activity className="w-6 h-6 stroke-[2.5]" />
+    <div className="w-full max-w-2xl space-y-4">
+      {/* Diagram Schematic Title Banner */}
+      <div className="flex items-center justify-between text-xs font-black uppercase text-slate-900 dark:text-slate-100 bg-indigo-100 dark:bg-indigo-950 p-3 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)]">
+        <div className="flex items-center gap-2 truncate">
+          {categoryIcons[category] || <Activity className="w-4 h-4 text-indigo-600 stroke-[2.5]" />}
+          <span className="truncate">Visual Diagram: {asset.title}</span>
+        </div>
+        <span className="font-mono text-[10px] bg-indigo-600 text-white px-2 py-0.5 rounded border border-slate-900 shrink-0">
+          {steps.length} STAGES
+        </span>
       </div>
-      <h4 className="text-xs font-black uppercase text-slate-900 dark:text-white">
-        {asset.title}
-      </h4>
-      <p className="text-xs font-semibold text-slate-600 dark:text-slate-400">
-        {asset.description}
-      </p>
+
+      {/* Graphical Flow / Node Map */}
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl border-2 border-slate-900 shadow-[5px_5px_0px_0px_rgba(15,23,42,1)] space-y-4">
+        <div className="text-[10px] font-black uppercase tracking-wider text-slate-500 flex items-center justify-between border-b-2 border-slate-900 pb-2">
+          <span className="flex items-center gap-1.5">
+            <GitCommit className="w-3.5 h-3.5 stroke-[2.5] text-indigo-600" /> Process Flow & Node Connections
+          </span>
+          <span className="font-mono">EXTRACTED STRUCTURE</span>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
+          {steps.map((step, idx) => (
+            <div
+              key={idx}
+              className="relative bg-slate-50 dark:bg-slate-950 p-4 rounded-xl border-2 border-slate-900 shadow-[3px_3px_0px_0px_rgba(15,23,42,1)] space-y-2 flex flex-col justify-between"
+            >
+              <div className="flex items-center justify-between">
+                <span className="w-6 h-6 rounded-lg bg-indigo-600 text-white text-[11px] font-black flex items-center justify-center border border-slate-900 shadow-[1px_1px_0px_0px_rgba(15,23,42,1)]">
+                  {step.number}
+                </span>
+                <span className="text-[9px] font-mono font-bold uppercase text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950 px-2 py-0.5 rounded border border-indigo-900">
+                  Node {step.number}
+                </span>
+              </div>
+
+              <div>
+                <h5 className="text-xs font-black uppercase text-slate-900 dark:text-white line-clamp-1">
+                  {step.title}
+                </h5>
+                <p className="text-[11px] font-semibold text-slate-600 dark:text-slate-300 leading-snug mt-1.5">
+                  {step.detail}
+                </p>
+              </div>
+
+              {idx < steps.length - 1 && (
+                <div className="hidden lg:flex absolute -right-3.5 top-1/2 -translate-y-1/2 z-10 w-6 h-6 rounded-full bg-amber-400 text-slate-900 border-2 border-slate-900 items-center justify-center shadow-[2px_2px_0px_0px_rgba(15,23,42,1)]">
+                  <ArrowRight className="w-3.5 h-3.5 stroke-[3]" />
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      </div>
     </div>
   );
 };

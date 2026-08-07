@@ -158,7 +158,7 @@ export const PdfViewerPane: React.FC<PdfViewerPaneProps> = ({
           <div className="flex items-center justify-between border-b-2 border-slate-900 dark:border-slate-700 pb-4">
             <div>
               <p className="bento-eyebrow text-slate-400">
-                DOCUMENT PREVIEW • PAGE {currentPage} OF {totalPages}
+                AI-RECONSTRUCTED PAGE SUMMARY • PAGE {currentPage} OF {totalPages}
               </p>
               <h3 className="text-sm font-black uppercase text-slate-900 dark:text-white mt-1">
                 {analysis.metadata.title}

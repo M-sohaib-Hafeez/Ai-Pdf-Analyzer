@@ -55,7 +55,23 @@ export const UploadPanel: React.FC<UploadPanelProps> = ({
       return;
     }
 
-    pdfFiles.forEach(file => {
+    const MAX_SIZE_BYTES = 30 * 1024 * 1024; // 30MB cap
+    const validFiles: File[] = [];
+
+    for (const file of pdfFiles) {
+      if (file.size > MAX_SIZE_BYTES) {
+        alert(`File "${file.name}" (${(file.size / (1024 * 1024)).toFixed(1)} MB) exceeds the maximum allowed size limit of 30MB.`);
+      } else {
+        validFiles.push(file);
+      }
+    }
+
+    if (selectedFiles.length + validFiles.length > 5) {
+      alert('Batch limit exceeded: You can analyze a maximum of 5 PDF files per request.');
+      return;
+    }
+
+    validFiles.forEach(file => {
       const reader = new FileReader();
       reader.onload = (e) => {
         const base64 = e.target?.result as string;

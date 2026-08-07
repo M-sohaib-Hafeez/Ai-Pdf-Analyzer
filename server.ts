@@ -4,15 +4,33 @@ import { fileURLToPath } from 'url';
 import { GoogleGenAI, Type } from '@google/genai';
 import dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
+import rateLimit from 'express-rate-limit';
 
 dotenv.config();
 
 const app = express();
 const PORT = 3000;
 
+// Trust reverse proxy (Cloud Run / Nginx) for express-rate-limit IP detection
+app.set('trust proxy', 1);
+
 // Increase payload limits for PDF base64 uploads
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
+
+// Rate limiting middleware for Gemini API protection (default: 10 requests per 15 min per IP)
+const maxRequests = process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 10;
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: maxRequests,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many API requests from this IP. Please wait 15 minutes before retrying.' }
+});
+
+app.use('/api/analyze-pdf', limiter);
+app.use('/api/chat-pdf', limiter);
+app.use('/api/re-synthesize', limiter);
 
 // Lazy GoogleGenAI initialization
 function getGenAI() {
@@ -72,8 +90,8 @@ REQUIRED MODULES & OUTPUT SPECIFICATIONS:
    - Include exact page citation for each table.
 
 4. MEDIA & VISUAL ASSET EXTRACTION:
-   - Identify visual assets (diagrams, charts, photos, architecture flows, formulas).
-   - Provide title, category ("diagram" | "chart" | "photo" | "architecture" | "formula"), pageNumber, caption (contextual relevance), and description.
+   - Identify all visual assets (diagrams, flowcharts, architecture diagrams, charts, photos, formulas).
+   - Provide title, category ("diagram" | "chart" | "photo" | "architecture" | "formula"), pageNumber, caption (contextual relevance), and a detailed step-by-step description (e.g., "Step 1: Ingestion -> Step 2: Processing -> Step 3: Storage -> Step 4: Output").
 
 5. ACTION ITEMS CHECKLIST:
    - Extract explicit or implied tasks, future work, policy mandates, and deadlines.
@@ -237,6 +255,19 @@ app.post('/api/analyze-pdf', async (req, res) => {
 
     if (!files || !Array.isArray(files) || files.length === 0) {
       return res.status(400).json({ error: 'At least one PDF file (base64) is required.' });
+    }
+
+    if (files.length > 5) {
+      return res.status(400).json({ error: 'Batch upload limit exceeded. Maximum 5 PDF files allowed per request.' });
+    }
+
+    // Server-side check for 30MB file size limit per document
+    for (const file of files) {
+      const rawBase64 = file.base64 ? (file.base64.includes('base64,') ? file.base64.split('base64,')[1] : file.base64) : '';
+      const estimatedBytes = Math.round((rawBase64.length * 3) / 4);
+      if (estimatedBytes > 30 * 1024 * 1024) {
+        return res.status(400).json({ error: `File "${file.name || 'document'}" exceeds maximum allowed size of 30MB.` });
+      }
     }
 
     const ai = getGenAI();

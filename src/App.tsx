@@ -13,6 +13,13 @@ import {
   SampleDoc
 } from './types';
 import { SAMPLE_DOCS, SAMPLE_BATCH_ANALYSIS } from './data/samplePdfs';
+import {
+  loadHistoryFromIDB,
+  saveAnalysisToIDB,
+  deleteAnalysisFromIDB,
+  clearAllHistoryFromIDB
+} from './lib/db';
+import { apiFetch } from './utils/api';
 
 export default function App() {
   const [activeAnalysis, setActiveAnalysis] = useState<AnalysisResult | BatchAnalysisResult | null>(null);
@@ -21,15 +28,25 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [isResynthesizing, setIsResynthesizing] = useState<boolean>(false);
 
-  // History & Storage
-  const [historyList, setHistoryList] = useState<Array<AnalysisResult | BatchAnalysisResult>>(() => {
-    try {
-      const saved = localStorage.getItem('pdf_analyzer_history');
-      return saved ? JSON.parse(saved) : [SAMPLE_BATCH_ANALYSIS];
-    } catch {
-      return [SAMPLE_BATCH_ANALYSIS];
-    }
-  });
+  // History & Storage via IndexedDB
+  const [historyList, setHistoryList] = useState<Array<AnalysisResult | BatchAnalysisResult>>([SAMPLE_BATCH_ANALYSIS]);
+
+  useEffect(() => {
+    // Load history asynchronously from IndexedDB on startup
+    loadHistoryFromIDB()
+      .then(stored => {
+        if (stored && stored.length > 0) {
+          setHistoryList(stored);
+        } else {
+          // Initialize default sample in IndexedDB
+          saveAnalysisToIDB(SAMPLE_BATCH_ANALYSIS).catch(() => {});
+          setHistoryList([SAMPLE_BATCH_ANALYSIS]);
+        }
+      })
+      .catch(err => {
+        console.warn('Could not read history from IndexedDB:', err);
+      });
+  }, []);
 
   const [darkMode, setDarkMode] = useState<boolean>(() => {
     try {
@@ -45,15 +62,6 @@ export default function App() {
 
   const [isHistoryOpen, setIsHistoryOpen] = useState<boolean>(false);
   const [isPrivacyOpen, setIsPrivacyOpen] = useState<boolean>(false);
-
-  // Save history to localStorage
-  useEffect(() => {
-    try {
-      localStorage.setItem('pdf_analyzer_history', JSON.stringify(historyList));
-    } catch (e) {
-      console.warn('Failed to persist history to localStorage:', e);
-    }
-  }, [historyList]);
 
   // Dark mode class toggle
   useEffect(() => {
@@ -80,7 +88,7 @@ export default function App() {
       setTimeout(() => setAnalysisStep('Extracting Multimodal Tables & Figures...'), 1500);
       setTimeout(() => setAnalysisStep('Synthesizing Citations & Executive Summary...'), 3000);
 
-      const response = await fetch('/api/analyze-pdf', {
+      const response = await apiFetch('/api/analyze-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ files, personaLens, summaryDepth })
@@ -97,7 +105,14 @@ export default function App() {
       setActiveAnalysis(result);
       setCurrentPage(1);
 
-      // Add to history
+      // Add to IndexedDB storage
+      try {
+        await saveAnalysisToIDB(result);
+      } catch (dbErr: any) {
+        console.error('Failed to save to IndexedDB:', dbErr);
+        alert(`Storage Warning: Analysis completed, but failed to persist to IndexedDB library: ${dbErr.message || dbErr}`);
+      }
+
       setHistoryList(prev => [result, ...prev.filter(h => h.id !== result.id)]);
     } catch (err: any) {
       console.error('Error during analysis:', err);
@@ -120,7 +135,7 @@ export default function App() {
 
     setIsResynthesizing(true);
     try {
-      const response = await fetch('/api/re-synthesize', {
+      const response = await apiFetch('/api/re-synthesize', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -141,6 +156,7 @@ export default function App() {
           keyInsights: data.keyInsights || activeAnalysis.keyInsights
         };
         setActiveAnalysis(updatedDoc);
+        saveAnalysisToIDB(updatedDoc).catch(() => {});
       }
     } catch (err) {
       console.warn('Re-synthesize fallback:', err);
@@ -149,12 +165,22 @@ export default function App() {
     }
   };
 
-  const handleDeleteHistoryItem = (id: string) => {
+  const handleDeleteHistoryItem = async (id: string) => {
+    try {
+      await deleteAnalysisFromIDB(id);
+    } catch (dbErr) {
+      console.warn('Failed to delete item from IndexedDB:', dbErr);
+    }
     setHistoryList(prev => prev.filter(item => item.id !== id));
   };
 
-  const handleClearAllHistory = () => {
+  const handleClearAllHistory = async () => {
     if (confirm('Clear all saved analysis entries from local library?')) {
+      try {
+        await clearAllHistoryFromIDB();
+      } catch (dbErr) {
+        console.warn('Failed to clear IndexedDB:', dbErr);
+      }
       setHistoryList([]);
     }
   };

@@ -11,6 +11,7 @@ import {
   Bookmark
 } from 'lucide-react';
 import { ChatMessage, AnalysisResult } from '../types';
+import { apiFetch } from '../utils/api';
 
 interface ChatPanelProps {
   analysis: AnalysisResult;
@@ -61,15 +62,21 @@ export const ChatPanel: React.FC<ChatPanelProps> = ({ analysis, onJumpToPage }) 
     setIsSending(true);
 
     try {
-      const response = await fetch('/api/chat-pdf', {
+      const userMessageCount = messages.filter(m => m.sender === 'user').length;
+      const sendPdfBinary = userMessageCount === 0;
+
+      const response = await apiFetch('/api/chat-pdf', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           message: queryText,
           history: messages.slice(-6),
           documentSummary: analysis.executiveSummary,
-          fileBase64: analysis.fileDataUrl,
-          docName: analysis.documentName
+          fileBase64: sendPdfBinary ? analysis.fileDataUrl : undefined,
+          docName: analysis.documentName,
+          keyInsights: analysis.keyInsights,
+          tables: analysis.tables,
+          tableOfContents: analysis.tableOfContents
         })
       });
 
