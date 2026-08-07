@@ -1,0 +1,49 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer utilities {
+  .bento-card {
+    background-color: #ffffff;
+    border-width: 2px;
+    border-color: #0f172a;
+    border-radius: 1rem;
+    box-shadow: 5px 5px 0px 0px #0f172a;
+    transition: all 0.2s ease;
+  }
+
+  .dark .bento-card {
+    background-color: #0f172a;
+    border-color: #334155;
+    box-shadow: 5px 5px 0px 0px #020617;
+  }
+
+  .bento-btn {
+    border-width: 2px;
+    border-color: #0f172a;
+    box-shadow: 3px 3px 0px 0px #0f172a;
+    transition: all 0.15s ease;
+  }
+
+  .bento-btn:hover {
+    transform: translate(1px, 1px);
+    box-shadow: 2px 2px 0px 0px #0f172a;
+  }
+
+  .dark .bento-btn {
+    border-color: #334155;
+    box-shadow: 3px 3px 0px 0px #020617;
+  }
+
+  .dark .bento-btn:hover {
+    box-shadow: 2px 2px 0px 0px #020617;
+  }
+
+  .bento-eyebrow {
+    font-size: 10px;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+  }
+}
+

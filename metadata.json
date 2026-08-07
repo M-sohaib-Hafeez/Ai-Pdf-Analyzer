@@ -1,0 +1,6 @@
+{
+  "name": "PDF Insight Analyzer",
+  "description": "Multimodal document intelligence platform providing structured summaries, editable data tables, interactive charts, grounded Q&A, and multi-format exports.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Lumina PDF Analyzer - Multimodal Document Intelligence Engine</title>
+    <script>
+      (function() {
+        function shouldSuppress(err) {
+          if (!err) return false;
+          var str = typeof err === 'string' ? err : (err.message || err.reason || String(err));
+          return str.indexOf('WebSocket') !== -1 || 
+                 str.indexOf('closed without opened') !== -1 || 
+                 str.indexOf('vite') !== -1 ||
+                 str.indexOf('ws://') !== -1 ||
+                 str.indexOf('wss://') !== -1;
+        }
+
+        window.addEventListener('unhandledrejection', function(event) {
+          if (shouldSuppress(event.reason)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+
+        window.addEventListener('error', function(event) {
+          if (shouldSuppress(event.message) || shouldSuppress(event.error)) {
+            event.preventDefault();
+            event.stopImmediatePropagation();
+          }
+        }, true);
+      })();
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
+
