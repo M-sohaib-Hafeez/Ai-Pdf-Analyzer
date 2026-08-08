@@ -108,12 +108,10 @@ Ai-Pdf-Analyzer/
 
 ## Known Limitations & Roadmap
 
-- **No auth or rate limiting on the API routes.** They call Gemini with the server's own key — add authentication and/or rate limiting before deploying this somewhere with a public URL, or the key can be run up by anyone with the link.
-- **The document viewer doesn't render the actual PDF pages.** It shows a reconstructed preview built from the extracted insights for that page, alongside a working download link to the original file. A real pixel-accurate preview would need a PDF rendering library (e.g. pdf.js).
-- **Visual asset extraction returns descriptions, not real images.** The current diagram viewer renders a few hardcoded, keyword-matched illustrations for demo documents; arbitrary uploaded PDFs fall back to a generic caption card rather than an actual cropped image.
+- **No access gate — protected only by IP-based rate limiting.** The API routes are rate-limited (`RATE_LIMIT_MAX` per 15 min per IP) and cap uploads at 30MB/file and 5 files/batch, but there's no login or access code in front of the app (an access-code gate was tried and rolled back). That's a reasonable tradeoff for sharing the link with a small, known group — worth revisiting before sharing more widely.
+- **The document viewer doesn't render the actual PDF pages.** It shows a clearly labeled "AI-Reconstructed Page Summary" built from the extracted insights for that page, alongside a working download link to the original file. A real pixel-accurate preview would need a PDF rendering library (e.g. pdf.js).
+- **Visual asset extraction returns descriptions, not real images**, for any document outside the built-in sample set. The Gemini schema returns a caption/description per asset, not image bytes — real extraction would need Gemini to return bounding boxes that get cropped from a rendered page.
 - **Google Docs / Notion export produces API-ready JSON payloads, not a direct push.** Wiring this up to actually create a Doc or Notion page requires OAuth against those APIs.
-- **Analysis history lives in `localStorage`**, which has a small capacity (~5–10MB) and stores the full PDF per entry — history can silently fail to persist once you have a few real documents saved. IndexedDB would be a more durable fit.
-- **Chat re-sends the full PDF on every message** rather than reusing cached context, so longer conversations on large documents get slower and more expensive than they need to be.
 
 ## License
 
